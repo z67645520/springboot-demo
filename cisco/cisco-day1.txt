@@ -1,0 +1,40 @@
+交换机模式4个
+用户模式 >enable 进入
+特权模式 #configure terminal
+全局配置模式 (config)# interface fastEthernet 0/1
+接口模式
+以上命令可以输入一段字符后tab补全或通过输入一个或多个字符后跟?显示关于字符后的全部命令有哪些
+exit  返回上一级
+end ctrl+z 退回到特权模式
+
+全局配置模式修改主机名  hostname  xxxx
+
+查看交换机目前正在使用的配置在特权模式  show running-config
+
+配置登录交换机特权密码  登录全局配置模式 输入enable  password 123
+
+交换机运行期间的配置是内存中的在running-config里的,而保存在内存中的配置重启机器后会重置清空所以需要保存到开机加载的配置文件中,在特权模式输入write对运行在内存中的配置保存到开机加载的配置文件中.
+(保存配置文件除了write外还有 copy running-config startup-config进行保存
+
+如果购买了二手交换机其中配置比较乱,特权模式可以使用erase  startup-config进行清空
+,特权模式reload进行机器重启.
+
+
+问题集锦
+禁用DNS查询
+如你在用户或特权模式输错命令,设备会认为你在查找某个域名进行查找浪费时间,所以需要禁用DNS查询
+解决方法为:全局配置模式  no ip domain-lookup  
+其中no 是把之前的配置给取消掉,如不需要密码了可以 no 加设置密码的命令
+no enable password 
+
+
+你在交换机中进行配置的时候,会经常突然跳出许多日志信息打断你正在输入的命令,然后在想输入命令就不知道接下来是接什么,可以进入全局模式连接console 0 控制端进行设置
+line console 0 进行console口
+logging synchronous 
+
+在你不输入命令一段时间会进入锁屏模式然后就回到了用户模式,如果你在配置的过程中去查找资料时间超过机器锁屏时间,那你之前的配置就没了,默认时间10分钟,可以设置时间长点.
+进入全局,console 0 控制口,line console 0   (exec-timeout 0 0 取消锁屏不推荐不安全,第一个0是分钟,第二个0是秒)  可以延长时间  exec-timeout 30 0  30分钟   
+
+
+
+

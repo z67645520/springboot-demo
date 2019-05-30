@@ -1,0 +1,113 @@
+﻿
+以太网 mac地址是48比特二进制单位,12个十六进制,6个字节
+前24位比特是厂商标识,后24位是网卡标识
+
+
+
+新交换机里是初始状态啥都没有,连接了其他设备后,其他设备之间需要互相通讯而交换机里没有双方信息,首先会进行学习源地址mac地址和接口信息,后另一接口以12个f广播形式对外询问目标地址是那个,起广播域中的机器都会收到广播信息,然后都会进行解封装到达网络层后如果发现其ip信息找的不是本机就丢弃,如果是就单播通过交换机回复对方,交换机首先学习保存进mac表里,在转发信息.
+
+交换机工作原理
+学习:mac地址表是交换机通过学习接收的数据帧的源mac地址来形成的
+广播:如果目标地址在mac地址表中没有,交换机就向除源地址端口外的其他所有端口广播该数据帧
+转发:交换机根据mac地址表单播转发数据帧
+更新:交换机mac地址表的老化时间是300秒
+交换机如果发现一个帧的入端口和mac地址表中的源mac地址的所在端口不同,交换机将mac地址重新学习到新的端口
+
+交换机mac地址表信息在双方主机不通信的情况下默认倒计时300秒时间清空,过时重新经过学习 广播  转发 的经过.
+
+
+如有2个交换机相连,每个交换机下有3台主机,现在交换1下主机A向交换2下主机b进行访问,首先主机A连接到交换机的端口1到达交换机,交换机进行mac学习后对外进行广播询问,连接交换2的端口3向交换2发广播,交换2接收到数据帧后首先查看自身mac表,学习源mac地址和端口号,在向所有端口进行广播.主机C在查看数据包的目标mac不是自己就丢弃.主机b收到后发现是找自己就单播回复对方,交换2进行mac学习后转发交换1上的端口3 ,交换1学习后通过端口1转发给A.
+
+上述是交换机的工作原理,如果交换机互联多的话广播寻址会产生广播风暴,所以有了vlan(虚拟局域网)分割广播域避免广播风暴.
+
+
+特权模式查找mac地址表
+switch#show mac-address-table  300秒后不通信mac表自动清空
+
+
+配置vlan步骤
+创建vlan 
+将端口加入到相应的vlan中
+验证
+
+
+switch(config)#vlan vlan-id  如vlan 5 创建vlan 5
+switch(config-vlan)# name vlan-name  改vlan名
+
+switch(config)#no vlan 2 删除已创建的vlan 2
+
+将端口加入vlan中
+switch(config)#interface f0/1
+switch(config-if)#switchport access vlan vlan-id
+从vlan删除端口
+switch(config-if)#no switchport access vlan vlan-id
+将多个端口添加如某一个vlan中
+switch(config)#interface range f0/1-10 
+
+
+查看vlan信息
+switch#show vlan
+查看vlan 摘要信息
+switch#show vlan  brief 
+交换机的vlan是可以配置ip,主机可以远程连接到交换机进行操作.
+对vlan 配置ip地址
+全局配置模式:switch(config)#interface vlan 5
+switch(config-if)#ip address 192.168.0.5 255.255.255.0
+为交换机配置网关
+switch(config)#ip default-gateway 192.168.0.254
+
+现在有业务扩展又添加了一个交换机,而且需要同vlan设备互通.
+需要互通的是vlan5 所以第二个交换机划分为vlan5 并且配置vlan5的ip和第一个vlanip是一个网段, pc机也要是vlan5的网段 把 0/1和0/2端口加入vlan5  第一个交换机的0/3 加入vlan5中,然后ping测试.
+
+如上交换机只是2个端口加入vlan5 如果需要加1-10端口进vlan5一个个端口进去添加太麻烦,可以使用range 端口 同时进入1-10口进行配置:interface range fastethernet 0/1-10
+以上适用于 连续的端口, 如果是不连续端口,如1号口和3号口6号口加vlan5 就不适用
+可以使用interface range fastethernet 0/1,f0/3,f0/6
+
+
+2个交换机下的主机互联需要
+1,规划ip地址
+2,2台交换机对应端口添加到vlan
+3,添加端口到vlan里
+
+查看0/3端口加入了什么模式的vlan  (access或trunk)
+switch#show interfaces fastethernet 0/3 switchport 
+看到operational mode:static access 表示0/3 接口用的是access模式加入vlan
+
+switchport access vlan 10
+其中access是表示接入链路,可以承载1个vlan数据,如果2个交换机有下有2个vlan需要链接,而access只能承载一个vlan ,那表示有一个vlan无法联通,
+如需承载多个模式需要把access模式改成trunk模式也就是中继链路,可以承载多个可以自定义承载.
+如下修改2台交换机相连端口vlan链接模式为中继模式(新建也是如下)
+switch(config-if)#switchport mode trunk
+
+
+如果trunk模式只使用一条链路,如何标记多个vlan的数据?
+这就引入了802.1Q标记这个标记是公有标记全球通用   长度4字节
+采用内部标记方法
+ISL是cisco私有标记  长度30字节  采用外部标记方法
+
+
+
+添加
+
+switch(config-if)#switchport  trunk  allowed  vlan  remove 10  在中继链路中限制vlan 10数据的互通。
+switch(config-if)#switchport	 trunk  allowed  vlan  add   10  在中继链路中允许vlan 10 的互通
+
+查看中继端口允许vlan的列表
+show  interface interfase-id switchport
+
+
+2个交换机单通道trunk 连接会产生单点故障遂又添加一根线路连接2机，后进行链路聚合把交换机1的2跟线聚合为一，2的交换机的2跟线路聚合为一
+switch(config)#interface range  fascethernet 0/3-4
+switch(config-if)#channel-group 1 mode on
+switch# show run 可以看到
+interface FastEthernet0/3
+channel-group 1 mode on
+interface FastEthernet0/4
+channel-group 1 mode on
+表示已经聚合
+switch(config)#interface   port-channel  1  进入聚合端口
+后查看聚合端口和加入的0/3-0/4是否是trunk模式如果不是如下操作
+switch(config-if)#switchport mode   trunk   把聚合端口改为trunk 中继模式
+
+
+    查看哪个接口是那个以太通道  show etherchannel summary

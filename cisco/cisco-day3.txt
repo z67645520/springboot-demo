@@ -1,0 +1,184 @@
+路由表
+show ip route  
+C 表示直连路由网段
+L 表示本地路由地址
+S 表示静态路由
+如果有2台路由,而且其下的主机需要互联并且是不同网段(非直连网段)需要人为添加静态路由至2台互联端口路由表中.
+
+静态路由特点: 由管理员手工配置,为单向条目
+通信双方的边缘路由器都需要指定,否则会导致数据包有去无回.
+
+路由1
+switch(config)#ip route 192.168.3.0 255.255.255.0 192.168.1.2 
+		你要链接的目标网段    子网掩码	    下一跳地址(对方连接你路由器离你最近的端口ip)
+
+路由2
+switch(config)#ip route  192.168.1.0 255.255.255.0 192.168.1.1
+
+静态路由配错无法覆盖只能删除
+如果又添加一新路由设备需要修改网络结构根据实际情况修改 下一跳,把不正确下一跳删除
+switch(config)#no ip route 192.168.3.0 255.255.255.0 192.168.1.1 
+
+删除一个接口ip地址或直接覆盖
+switch(config-if)#no ip address   
+
+通过静态路由实现全网互通
+关键思路,每个路由器都要有去往任意网段的路由,如果没有请手动添加
+
+例:
+公司业务扩展将2台路由扩展为3台
+现在有3台路由器 R1  R2  R3其下各有1台pc都是不同网段
+PC1 =192.168.0.1
+PC2=192.168.1.1
+
+R1  G0/0 =pc1网关(192.168.0.254
+R1 G0/1 =192.168.3.1 (链接路由2 的G0/0)
+R2 G0/0 = 192.168.3.2 (链接路由1 G0/1)
+R2 G0/1 = 192.168.4.1 (链接路由3 G0/0
+R3 G0/0  = 192.168.4.2 (链接路由2 G0/1
+R3 G0/1 = PC2网关(192.168.1.254
+
+R1配置如下
+switch(config)#in f0/0
+switch(config-if)#ip address 192.168.0.254 255.255.255.0
+switch(config-if)#no shutdown
+witch(config-if)#in f0/1   (可以直接在0/0接口切换到0/1
+switch(config-if)#ip address  192.168.3.1 255.255.255.0
+switch(config-if)#no shutdown
+switch(config)#ip route 192.168.1.0 255.255.255.0 192.168.3.2
+switch(config)#ip route 192.168.4.0 255.255.255.0 192.168.3.2
+路由需要添加2个静态路由,一个是要连接的对方网段pc一个是中间经过路由另一端的ip网段
+因为静态路由选择离自己最近端口ip为下一跳
+如上 静态路由添加可以用一个默认路由实现全网互通
+switch(config)#ip route 0.0.0.0 0.0.0.0 192.168.3.2
+
+
+R2配置如下
+switch(config)#in f0/0
+switch(config-if)#ip address 192.168.3.2  255.255.255.0
+switch(config-if)#no shutdown
+witch(config)#in f0/1
+switch(config-if)#ip address 192.168.4.1 255.255.255.0
+switch(config-if)#no shutdown
+switch(config)#ip route 192.168.0.0 255.255.255.0 192.168.3.1
+switch(config)#ip route 192.168.1.0 255.255.255.0 192.168.4.2
+
+R3配置如下
+switch(config)#in f0/0
+switch(config-if)#ip address    192.168.4.2 255.255.255.0
+switch(config-if)#no shutdown
+witch(config)#in f0/1
+switch(config-if)#ip address  192.168.1.254 255.255.255.0
+switch(config-if)#no shutdown
+switch(config)#ip route 192.168.0.0 255.255.255.0 192.168.4.1
+switch(config)#ip route 192.168.3.0 255.255.255.0 192.168.4.1
+R3 路由需要添加2个静态路由,一个是要连接的对方网段pc一个是中间经过路由另一端的ip网段
+如上 静态路由添加可以用一个默认路由实现全网互通
+switch(config)#ip route 0.0.0.0 0.0.0.0 192.168.4.1
+测试ping
+
+switch(config)#ip route 默认路由
+默认路由不能对内网,只能对外,不然会导致路由环路
+0.0.0.0 0.0.0.0
+
+三层交换机= 二层交换+三层路由转发
+默认三层功能是关闭的,需要输入 ip routing
+要三层交换机实现不同网段联通,需要加入的vlan添加ip为其vlan下pc机的网关地址,ip配好后,如果你配置的是vlan1 的ip 千万不要忘记no shutdoun 开启vlan 其他vlan不需要no shutdown 因为其他vlan自动开启的.
+
+switch(config)#vlan 5
+switch(config-vlan)#vlan 10
+switch(config-vlan)#exit
+switch(config)#in f0/1 
+switch(config-if)#switchport access vlan 5
+switch(config-if)#in f0/2
+switch(config-if)#switchport access vlan 10
+switch(config-vlan)#exit
+switch(config)#in vlan 5
+switch(config-if)#ip addr 192.168.0.254 255.255.255.0  (用于pc的网关)
+switch(config-if)#in vlan 10
+switch(config-if)#ip addr 192.168.1.254 255.255.255.0  (另一网段网关)
+switch(config)#ip routing   (开启路由功能)
+switch#show ip route (出现路由表表示开启成功)
+测试ping
+
+
+
+一个网络拓扑
+一台3层交换路由
+一台 2层交换机
+3台pc
+
+首先3层交换路由上
+开启配置中继链路
+首先配置其封装标识为802.1q  
+进入链接2层交换的端口
+switch(config)#in f0/4
+switch(config-if)# switchport trunk encapsulation dot1q (封装为.1q)
+switch(config-if)# switchport mode trunk ( 在开启中继)
+3层完成
+为3层创建vlan2 vlan3并为vlan 1 vlan2 vlan3 配置ip 为pc机网关
+vlan1 配置完ip后no shutdown 启动端口
+switch(config)#vlan 2 
+switch(config-vlan)#vlan 3
+switch(config-vlan)#exit
+switch(config)#in vlan 1
+switch(config-if)# ip addr 192.168.1.254 255.255.255.0
+switch(config-if)# no shutdown
+switch(config-if)# in vlan 2
+switch(config-if)# ip addr 192.168.2.254 255.255.255.0
+switch(config-if)# in vlan 3
+switch(config-if)# ip addr 192.168.3.254 255.255.255.0
+
+
+配置2层,
+配置链接3层的端口为中继
+switch(config)#in f0/4
+switch(config-if)# switchport mode trunk 
+vlan1 默认存在,而且默认所有端口都是vlan1
+创建vlan2 vlan3
+把0/2 0/3 分别加入vlan2 vlan3
+在二层交换机不需要为vlan1 vlan2 vlan3 创建ip 因为进行转发的是3层交换路由
+
+三层交换路由默认接口是交换机接口但是如果它有一端链接了路由器,那接口无法配ip就无法往外转发,可以转换为路由接口.
+将交换机端口转换成路由器端口
+进入链接外面路由器的端口输入 no switchport
+switch(config-if)# no switchport  (switchport解释为交换机接口,no switchport就是非交换机端口,非交换机端口自动转换路由端口了)
+switch(config)#in f0/2
+switch(config-if)# no switchport 
+switch(config-if)# ip addr 192.168.4.1 255.255.255.0
+
+想要链接另一台路由器,需要对方路由器,添加ip route表
+如三层交换路由下有3个网段都需要链接可以在三层链接的路由器上添加3条静态路由表
+switch(config)#ip route 192.168.1.0 255.255.255.0 192.168.4.1 (下一跳为对面三层机的链接端口)
+
+
+另一台路由器添加一个pc和网段
+需要路由器链接pc需要配置ip地址
+pc配置ip和网关
+三层交换需要配置静态路由,可以直接向外添加默认路由
+
+动态路由
+宣告
+动态路由只宣告自己直连网段
+OSPF是动态路由协议(open shortest path first (开放式最短路径优先）
+配置
+启动OSPF路由进程
+Route(config)#router ospf process-id (进程号默认为1）
+指定OSPF协议运行的接口和所在区域  宣告自己所在的直连网段和所在区域
+Route(config-router)#network 192.168.4.0  0.0.0.255 (这边子网为反掩码） area 0 (area 表示区域，而area 0是骨干区域0）
+在路由器上开启ospf 并宣告直连网段
+Route(config)#router ospf 1
+Route(config-router)#network 192.168.4.0  0.0.0.255  area 0
+Route(config-router)#network 192.168.5.0  0.0.0.255  area 0
+
+在三层交换上开启ospf 并宣告直连网段
+Route(config)#router ospf 1
+Route(config-router)#network 192.168.4.0  0.0.0.255  area 0
+Route(config-router)#network 192.168.3.0  0.0.0.255  area 0
+Route(config-router)#network 192.168.1.0  0.0.0.255  area 0
+Route(config-router)#network 192.168.2.0  0.0.0.255  area 0
+
+
+
+
+

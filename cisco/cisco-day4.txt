@@ -1,0 +1,124 @@
+访问控制列表
+标准acl控制列表 (1~99)
+扩展acl控制列表(100~199)
+
+如有个网络结构如下
+PC1=192.168.1.1
+PC2=192.168.2.1
+PC3=192.168.2.2
+switch链接了2网段的2台pc
+R1 G0/0= 192.168.1.254
+R1 G0/1=192.168.2.254
+要求用标准控制 禁止pc3 访问pc1,允许其他pc访问
+先设置标准控制表号为1,并拒绝192.168.2.2 访问
+Route(config)#access-list 1 deny host 192.168.2.2
+或
+Route(config)#access-list 1 deny 192.168.2.2 0.0.0.0 (4个0 表示严格匹配单主机)(
+0.0.0.255 表示前三位严格匹配为192.168.2 后一位可以任意1-254 任意数字)
+以上两条配置达到同一目的
+放行其他数据
+Route(config)#access-list 1 permit any
+进入R1 G0/1 链接2网段的那边端口
+Route(config)#in g0/1
+Route(config-if)#ip access-list 1 in (表示要通过0/1进来的数据如果匹配1控制表号中的条目就执行控制列表1的策略)如果是2.2 访问就拒绝其他允许
+Route(config)#in g0/0 
+Route(config-if)#ip access-list 1 out  (表示要通过0/0出去的数据配置控制列表1号的条目如果策略匹配拒绝就拒绝,允许就允许,一般控制放在靠近源ip的端口上使用in)
+
+查看访问控制列表
+Route# show access-list 1 (查看1号控制列表,查看所有控制列表)
+删除访问控制列表(注:删除操作是删除一个控制表号的所有条目)
+Route(config)#no ip access-list 1
+
+只允许主机pc2 访问主机pc1 ,并禁止所有其他机器数据
+Route(config)#no access-list 1 (可以不删除上个列表,重新建立个2的表就ok) 
+Route(config)#access-list 2 permit 192.168.2.2 0.0.0.0
+Route(config)#access-list 2  deny any
+Route(config)#in g0/1
+Route(config-if)#no ip access-list 1 in 
+Route(config-if)#ip access-list 2 in 
+
+
+扩展访问控制列表
+switch(config)#no access-list 1
+禁止pc2 访问pc1
+switch(config)# access-list 100 deny ip 192.168.2.2 0.0.0.0  192.168.1.1 0.0.0.0 					(源ip)			(目标地址)
+
+switch(config)# access-list 100  petmin ip any any  (允许其他机器互联)
+
+switch(config)# in g0/1
+switch(config-if)#ip access-list 100 in
+
+NAT作用
+通过将内部ip 转换为全球唯一公网ip 使内部网络可以链接互联网
+NAT 优点
+节省公有合法ip地址
+处理地址重叠
+安全性
+
+NAT缺点
+延迟增大
+配置和维护的复杂性
+
+NAT实现方法
+静态转换 (一般用于服务器) 一对一不变的,借助静态转换
+端口多路复用PAT ( 用于公司内部到外部  映射
+
+静态NAT的配置
+为接口ip地址配置
+决定需要转换的主机地址
+决定采用什么公用地址
+在内部和外部端口上启用NAT
+Route(config)#ip nat inside source static  local-ip   global-ip 
+		 		  静态模式   内部地址  外部公网地址
+
+案例:配置静态NAT
+在R1 上配置静态NAT使192.168.1.1 转换为100.0.0.2, 192.168.1.2 换为100.0.0.3 
+R1 G0/0 =192.168.1.254
+R1 G0/1 =100.0.0.1
+PC1=192.168.1.1
+PC2 =192.168.1.2
+外网
+PC3=100.0.0.10
+Route(config)#in g0/0
+Route(config-if)#ip addr 192.168.1.254 255.255.255.0
+Route(config-if)#no shutdown
+Route(config-if)#in g0/1
+Route(config-if)#ip addr 100.0.0.1
+Route(config-if)#no shutdown
+Route(config)#ip nat inside source static 192.168.1.1 100.0.0.2
+Route(config)#ip net inside source static 192.168.1.2 100.0.0.3
+分别进入路由端口应用nat 在链接pc端使用inside 链接外网的那端使用outside
+Route(config)#in g0/0 
+Route(config-if)#ip nat inside  
+Route(config-if)#in g0/1
+Route(config-if)#ip nat  outside
+
+案例 :配置端口多路复用
+在R1 配置PAT 端口多路复用 是企业内外192.168.1.0/24复用g0/1的ip 实现外网访问
+PC1=192.168.1.1
+PC2=192.168.1.2
+PC3=192.168.1.3
+R1 G0/0=192.168.1.254
+R1 G0/1 =100.0.0.1
+外网
+RC4=100.0.0.2 (无需网关)
+Route(config)#in g0/0
+Route(config-if)#ip addr 192.168.1.254 255.255.255.0
+Route(config-if)#no shutdown
+Route(config-if)#in g0/1
+Route(config-if)#ip addr 100.0.0.1
+Route(config-if)#no shutdown
+Route(config)#access-list 1 permit 192.168.1.0 0.0.0.255  (首先添加访问控制列表1 允许1.0 网段向外访问)
+Route(config)#ip nat inside source list 1 interface g0/1 overload 
+添加控制表从向外的端口0/1 复用端口
+
+分别进入路由端口应用nat 在链接pc端使用inside 链接外网的那端使用outside
+Route(config)#in g0/0
+Route(config-if)#ip nat inside
+Route(config-if)#in g0/1
+Route(config-if)#ip nat outside
+
+跟踪NAT (进行nat不通时的排错) debug ip nat
+Route#debug ip nat
+后进入pc机进行ping测试,然后会在路由上出现信息
+Route#undebug (关闭debug模式)
